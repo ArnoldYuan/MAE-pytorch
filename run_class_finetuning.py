@@ -1,11 +1,3 @@
-# --------------------------------------------------------
-# Based on BEiT, timm, DINO and DeiT code bases
-# https://github.com/microsoft/unilm/tree/master/beit
-# https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# https://github.com/facebookresearch/deit
-# https://github.com/facebookresearch/dino
-# --------------------------------------------------------'
-
 import argparse
 import datetime
 import numpy as np
@@ -14,16 +6,14 @@ import torch
 import torch.backends.cudnn as cudnn
 import json
 import os
-
+import os.path as osp
 from pathlib import Path
 from collections import OrderedDict
-
 from timm.data.mixup import Mixup
 from timm.models import create_model
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import ModelEma
 from optim_factory import create_optimizer, get_parameter_groups, LayerDecayValueAssigner
-
 from datasets import build_dataset
 from engine_for_finetuning import train_one_epoch, evaluate
 from utils import NativeScalerWithGradNormCount as NativeScaler
@@ -35,12 +25,12 @@ import modeling_finetune
 def get_args():
     parser = argparse.ArgumentParser('MAE fine-tuning and evaluation script for image classification', add_help=False)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--epochs', default=30, type=int)
+    parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--update_freq', default=1, type=int)
     parser.add_argument('--save_ckpt_freq', default=20, type=int)
 
     # Model parameters
-    parser.add_argument('--model', default='deit_base_patch16_224', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='vit_base_patch16_224', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
@@ -128,7 +118,7 @@ def get_args():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # * Finetuning params
-    parser.add_argument('--finetune', default='', help='finetune from checkpoint')
+    parser.add_argument('--finetune', default='checkpoints/mae_pretrain.pth', help='finetune from checkpoint')
     parser.add_argument('--model_key', default='model|module', type=str)
     parser.add_argument('--model_prefix', default='', type=str)
     parser.add_argument('--init_scale', default=0.001, type=float)
@@ -137,17 +127,13 @@ def get_args():
     parser.add_argument('--use_cls', action='store_false', dest='use_mean_pooling')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
-                        help='dataset path')
-    parser.add_argument('--eval_data_path', default=None, type=str,
-                        help='dataset path for evaluation')
     parser.add_argument('--nb_classes', default=1000, type=int,
                         help='number of the classification types')
     parser.add_argument('--imagenet_default_mean_and_std', default=True, action='store_true')
 
-    parser.add_argument('--data_set', default='IMNET', choices=['CIFAR', 'IMNET', 'image_folder'],
+    parser.add_argument('--data_set', default='CelebA', choices=['CIFAR', 'IMNET', 'CelebA', 'image_folder'],
                         type=str, help='ImageNet dataset path')
-    parser.add_argument('--output_dir', default='',
+    parser.add_argument('--output_dir', default='output/',
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default=None,
                         help='path where to tensorboard log')
@@ -168,7 +154,7 @@ def get_args():
                         help='start epoch')
     parser.add_argument('--eval', action='store_true',
                         help='Perform evaluation only')
-    parser.add_argument('--dist_eval', action='store_true', default=False,
+    parser.add_argument('--dist_eval', action='store_true', default=True,
                         help='Enabling distributed evaluation')
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--pin_mem', action='store_true',
@@ -498,7 +484,7 @@ def main(args, ds_init):
         if args.output_dir and utils.is_main_process():
             if log_writer is not None:
                 log_writer.flush()
-            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+            with open(osp.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
     total_time = time.time() - start_time

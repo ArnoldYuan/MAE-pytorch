@@ -1,22 +1,128 @@
-# --------------------------------------------------------
-# Based on BEiT, timm, DINO and DeiT code bases
-# https://github.com/microsoft/unilm/tree/master/beit
-# https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# https://github.com/facebookresearch/deit
-# https://github.com/facebookresearch/dino
-# --------------------------------------------------------'
 import os
 import torch
-
+from torch.utils.data import Dataset
 from torchvision import datasets, transforms
-
-from timm.data.constants import \
-    IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-
+import PIL
+import os.path as osp
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.data import create_transform
-
 from masking_generator import RandomMaskingGenerator
 from dataset_folder import ImageFolder
+
+
+class CelebA(Dataset):
+    def __init__(self, split, img_path='~/CelebA/celeba/img_align_celeba/', identity_file='~/CelebA/celeba/identity_CelebA.txt', num_ids=1000, trans=False):
+        self.num_ids = num_ids
+        self.trans = trans
+        self.img_path = osp.expanduser(img_path)
+        with open(osp.expanduser(identity_file)) as f:
+            lines = f.readlines()
+
+        id2file = {}
+        for line in lines:
+            file, id = line.strip().split()
+            id = int(id)
+            if id in id2file.keys():
+                id2file[id].append(file)
+            else:
+                id2file[id] = [file]
+
+        thres = 25
+        id2file_cleaned = {}
+        for key in id2file.keys():
+            if len(id2file[key]) > thres:
+                id2file_cleaned[key] = id2file[key]
+
+        self.name_list = []
+        self.label_list = []
+
+        if split == 'pub':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[:2000]:
+                for file in id2file_cleaned[key][:20]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        elif split == 'pub-dev':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[:2000]:
+                for file in id2file_cleaned[key][20:25]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        elif split == 'pub1':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[:1000]:
+                for file in id2file_cleaned[key][:20]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        elif split == 'pub1-dev':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[:1000]:
+                for file in id2file_cleaned[key][20:25]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        elif split == 'pub2':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[1000:2000]:
+                for file in id2file_cleaned[key][:20]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        elif split == 'pub2-dev':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[1000:2000]:
+                for file in id2file_cleaned[key][20:25]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        elif split == 'pri':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[2000:3000]:
+                for file in id2file_cleaned[key][:20]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        elif split == 'pri-dev':
+            i = 0
+            for key in sorted(id2file_cleaned.keys())[2000:3000]:
+                for file in id2file_cleaned[key][20:25]:
+                    self.name_list.append(file)
+                    self.label_list.append(i)
+                i += 1
+        else:
+            raise NotImplementedError()
+
+        self.processor = self.get_processor()
+    
+    def get_processor(self):
+        crop_size = 108
+        re_size = 224
+        offset_height = (218 - crop_size) // 2
+        offset_width = (178 - crop_size) // 2
+        crop = lambda x: x[:, offset_height:offset_height + crop_size, offset_width:offset_width + crop_size]
+
+        proc = []
+        proc.append(transforms.ToTensor())
+        proc.append(transforms.Lambda(crop))
+        proc.append(transforms.ToPILImage())
+        proc.append(transforms.Resize((re_size, re_size)))
+        proc.append(transforms.ToTensor())
+                    
+        return transforms.Compose(proc)
+
+    def __getitem__(self, index):
+        path = self.img_path + "/" + self.name_list[index]
+        img = PIL.Image.open(path).convert('RGB')
+        img = self.processor(img)
+        label = self.label_list[index]
+
+        return img, label
+
+    def __len__(self):
+        return len(self.name_list)
 
 
 class DataAugmentationForMAE(object):
@@ -74,6 +180,9 @@ def build_dataset(is_train, args):
     elif args.data_set == 'IMNET':
         root = os.path.join(args.data_path, 'train' if is_train else 'val')
         dataset = datasets.ImageFolder(root, transform=transform)
+        nb_classes = 1000
+    elif args.data_set == 'CelebA':
+        dataset = CelebA(split='pri') if is_train else CelebA(split='pri-dev')
         nb_classes = 1000
     elif args.data_set == "image_folder":
         root = args.data_path if is_train else args.eval_data_path

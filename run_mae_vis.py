@@ -1,16 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time    : 2021/11/18 22:40
-# @Author  : zhao pengfei
-# @Email   : zsonghuan@gmail.com
-# @File    : run_mae_vis.py
-# --------------------------------------------------------
-# Based on BEiT, timm, DINO and DeiT code bases
-# https://github.com/microsoft/unilm/tree/master/beit
-# https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# https://github.com/facebookresearch/deit
-# https://github.com/facebookresearch/dino
-# --------------------------------------------------------'
-
 import argparse
 import datetime
 import numpy as np
@@ -19,26 +6,22 @@ import torch
 import torch.backends.cudnn as cudnn
 import json
 import os
-
+import os.path as osp
 from PIL import Image
-
 from pathlib import Path
-
 from timm.models import create_model
-
 import utils
 import modeling_pretrain
 from datasets import DataAugmentationForMAE
-
 from torchvision.transforms import ToPILImage
 from einops import rearrange
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 def get_args():
-    parser = argparse.ArgumentParser('MAE visualization reconstruction script', add_help=False)
-    parser.add_argument('img_path', type=str, help='input image path')
-    parser.add_argument('save_path', type=str, help='save image path')
-    parser.add_argument('model_path', type=str, help='checkpoint path of model')
+    parser = argparse.ArgumentParser('MAE visualization reconstruction script')
+    parser.add_argument('--img_path', default='files/ILSVRC2012_val_00031649.JPEG', type=str, help='input image path')
+    parser.add_argument('--save_path', default='output/', type=str, help='save image path')
+    parser.add_argument('--model_path', default='checkpoints/mae_pretrain.pth', type=str, help='checkpoint path of model')
 
     parser.add_argument('--input_size', default=224, type=int,
                         help='images input size for backbone')
@@ -70,6 +53,7 @@ def get_model(args):
 
 def main(args):
     print(args)
+    os.makedirs(args.save_path, exist_ok=True)
 
     device = torch.device(args.device)
     cudnn.benchmark = True
@@ -106,7 +90,7 @@ def main(args):
         std = torch.as_tensor(IMAGENET_DEFAULT_STD).to(device)[None, :, None, None]
         ori_img = img * std + mean  # in [0, 1]
         img = ToPILImage()(ori_img[0, :])
-        img.save(f"{args.save_path}/ori_img.jpg")
+        img.save(osp.join(args.save_path, 'ori_img.jpg'))
 
         img_squeeze = rearrange(ori_img, 'b c (h p1) (w p2) -> b (h w) (p1 p2) c', p1=patch_size[0], p2=patch_size[0])
         img_norm = (img_squeeze - img_squeeze.mean(dim=-2, keepdim=True)) / (img_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6)
@@ -125,12 +109,12 @@ def main(args):
         rec_img = rec_img * (img_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6) + img_squeeze.mean(dim=-2, keepdim=True)
         rec_img = rearrange(rec_img, 'b (h w) (p1 p2) c -> b c (h p1) (w p2)', p1=patch_size[0], p2=patch_size[1], h=14, w=14)
         img = ToPILImage()(rec_img[0, :].clip(0,0.996))
-        img.save(f"{args.save_path}/rec_img.jpg")
+        img.save(osp.join(args.save_path, 'rec_img.jpg'))
 
         #save random mask img
         img_mask = rec_img * mask
         img = ToPILImage()(img_mask[0, :])
-        img.save(f"{args.save_path}/mask_img.jpg")
+        img.save(osp.join(args.save_path, 'mask_img.jpg'))
 
 if __name__ == '__main__':
     opts = get_args()
