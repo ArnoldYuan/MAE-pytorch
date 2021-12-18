@@ -20,7 +20,7 @@ from pathlib import Path
 from timm.models import create_model
 from optim_factory import create_optimizer
 
-from datasets import build_pretraining_dataset
+from datasets import CelebAMAEPretrain, build_pretraining_dataset
 from engine_for_pretraining import train_one_epoch
 from utils import NativeScalerWithGradNormCount as NativeScaler
 import utils
@@ -30,8 +30,8 @@ import modeling_pretrain
 def get_args():
     parser = argparse.ArgumentParser('MAE pre-training script', add_help=False)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--epochs', default=300, type=int)
-    parser.add_argument('--save_ckpt_freq', default=20, type=int)
+    parser.add_argument('--epochs', default=400, type=int)
+    parser.add_argument('--save_ckpt_freq', default=50, type=int)
 
     # Model parameters
     parser.add_argument('--model', default='pretrain_mae_base_patch16_224', type=str, metavar='MODEL',
@@ -46,7 +46,7 @@ def get_args():
     parser.add_argument('--drop_path', type=float, default=0.0, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
                         
-    parser.add_argument('--normlize_target', default=True, type=bool,
+    parser.add_argument('--normlize_target', default=False, type=bool,
                         help='normalized the target patch pixels')
 
     # Optimizer parameters
@@ -85,11 +85,11 @@ def get_args():
                         help='Training interpolation (random, bilinear, bicubic default: "bicubic")')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/train', type=str,
+    parser.add_argument('--data_path', default='/data/common/ILSVRC/Data/CLS-LOC/train/', type=str,
                         help='dataset path')
     parser.add_argument('--imagenet_default_mean_and_std', default=True, action='store_true')
 
-    parser.add_argument('--output_dir', default='',
+    parser.add_argument('--output_dir', default='output/pretrain',
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default=None,
                         help='path where to tensorboard log')
@@ -128,6 +128,7 @@ def get_model(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
+    # model.load_state_dict(torch.load('checkpoints/mae_pretrain.pth')['model'])
 
     return model
 
@@ -155,6 +156,7 @@ def main(args):
 
     # get dataset
     dataset_train = build_pretraining_dataset(args)
+    # dataset_train = CelebAMAEPretrain(args)
 
     if True:  # args.distributed:
         num_tasks = utils.get_world_size()

@@ -1,11 +1,3 @@
-# --------------------------------------------------------
-# --------------------------------------------------------
-# Based on BEiT, timm, DINO and DeiT code bases
-# https://github.com/microsoft/unilm/tree/master/beit
-# https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# https://github.com/facebookresearch/deit
-# https://github.com/facebookresearch/dino
-# --------------------------------------------------------'
 import io
 import os
 import math
@@ -15,15 +7,13 @@ from collections import defaultdict, deque
 import datetime
 import numpy as np
 from timm.utils import get_state_dict
-
 from pathlib import Path
-
 import torch
 import torch.distributed as dist
 from torch._six import inf
-
+from torchvision import transforms
+from torchvision.transforms.functional import InterpolationMode
 import random
-
 from tensorboardX import SummaryWriter
 
 
@@ -509,3 +499,9 @@ def create_ds_config(args):
         }
 
         writer.write(json.dumps(ds_config, indent=2))
+
+
+def high2low112(img):
+    proc = transforms.Resize((112, 112), interpolation=InterpolationMode.BILINEAR)
+    img = proc(img)
+    return img

@@ -24,7 +24,7 @@ import modeling_finetune
 
 def get_args():
     parser = argparse.ArgumentParser('MAE fine-tuning and evaluation script for image classification', add_help=False)
-    parser.add_argument('--batch_size', default=64, type=int)
+    parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--update_freq', default=1, type=int)
     parser.add_argument('--save_ckpt_freq', default=20, type=int)

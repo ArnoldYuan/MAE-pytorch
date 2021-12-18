@@ -1,4 +1,5 @@
 import os
+from numpy import False_
 import torch
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
@@ -11,9 +12,10 @@ from dataset_folder import ImageFolder
 
 
 class CelebA(Dataset):
-    def __init__(self, split, img_path='~/CelebA/celeba/img_align_celeba/', identity_file='~/CelebA/celeba/identity_CelebA.txt', num_ids=1000, trans=False):
+    def __init__(self, split, img_path='~/CelebA/celeba/img_align_celeba/', identity_file='~/CelebA/celeba/identity_CelebA.txt', num_ids=1000, trans=False, imagenet_default_mean_and_std=True):
         self.num_ids = num_ids
         self.trans = trans
+        self.imagenet_default_mean_and_std = imagenet_default_mean_and_std
         self.img_path = osp.expanduser(img_path)
         with open(osp.expanduser(identity_file)) as f:
             lines = f.readlines()
@@ -110,6 +112,11 @@ class CelebA(Dataset):
         proc.append(transforms.ToPILImage())
         proc.append(transforms.Resize((re_size, re_size)))
         proc.append(transforms.ToTensor())
+        
+        if self.trans is True:
+            mean = IMAGENET_INCEPTION_MEAN if not self.imagenet_default_mean_and_std else IMAGENET_DEFAULT_MEAN
+            std = IMAGENET_INCEPTION_STD if not self.imagenet_default_mean_and_std else IMAGENET_DEFAULT_STD
+            proc.append(transforms.Normalize(mean=torch.tensor(mean), std=torch.tensor(std)))
                     
         return transforms.Compose(proc)
 
@@ -120,6 +127,91 @@ class CelebA(Dataset):
         label = self.label_list[index]
 
         return img, label
+
+    def __len__(self):
+        return len(self.name_list)
+
+
+class CelebAMAEPretrain(Dataset):
+    def __init__(self, args, img_path='~/CelebA/celeba/img_align_celeba/', identity_file='~/CelebA/celeba/identity_CelebA.txt', num_ids=1000, imagenet_default_mean_and_std=False):
+        self.args = args
+        self.num_ids = num_ids
+        self.imagenet_default_mean_and_std = imagenet_default_mean_and_std
+        self.img_path = osp.expanduser(img_path)
+        with open(osp.expanduser(identity_file)) as f:
+            lines = f.readlines()
+
+        id2file = {}
+        for line in lines:
+            file, id = line.strip().split()
+            id = int(id)
+            if id in id2file.keys():
+                id2file[id].append(file)
+            else:
+                id2file[id] = [file]
+
+        thres = 25
+        id2file_cleaned = {}
+        for key in id2file.keys():
+            if len(id2file[key]) > thres:
+                id2file_cleaned[key] = id2file[key]
+
+        self.name_list = []
+        for key in sorted(id2file_cleaned.keys())[2000:3000]:
+            for file in id2file_cleaned[key][:20]:
+                self.name_list.append(file)
+
+        self.processor = self.get_processor()
+    
+    def get_processor(self):
+        crop_size = 108
+        re_size = 224
+        offset_height = (218 - crop_size) // 2
+        offset_width = (178 - crop_size) // 2
+        crop = lambda x: x[:, offset_height:offset_height + crop_size, offset_width:offset_width + crop_size]
+
+        mean = IMAGENET_INCEPTION_MEAN if not self.imagenet_default_mean_and_std else IMAGENET_DEFAULT_MEAN
+        std = IMAGENET_INCEPTION_STD if not self.imagenet_default_mean_and_std else IMAGENET_DEFAULT_STD
+
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Lambda(crop),
+            transforms.Resize((re_size, re_size)),
+            transforms.Normalize(mean=torch.tensor(mean), std=torch.tensor(std))
+        ])
+
+        self.masked_position_generator = RandomMaskingGenerator(
+            self.args.window_size, self.args.mask_ratio
+        )
+                    
+        return transform
+
+    def __getitem__(self, index):
+        path = self.img_path + "/" + self.name_list[index]
+        img = PIL.Image.open(path).convert('RGB')
+        img = self.processor(img)
+        masked_position = self.masked_position_generator()
+
+        return (img, masked_position), 0
+
+    def __len__(self):
+        return len(self.name_list)
+
+
+class Place365(Dataset):
+    def __init__(self, img_path='/data/common/zhuowen/val_256/'):
+        super().__init__()
+        self.img_path = img_path
+        self.processor = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
+        self.name_list = os.listdir(img_path)
+
+    def __getitem__(self, index):
+        path = osp.join(self.img_path, self.name_list[index])
+        img = PIL.Image.open(path).convert('RGB')
+        img = self.processor(img)
+
+        # currectly do not support labels
+        return img, 0
 
     def __len__(self):
         return len(self.name_list)
