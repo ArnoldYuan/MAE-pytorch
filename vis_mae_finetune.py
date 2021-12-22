@@ -15,9 +15,10 @@ from pathlib import Path
 from timm.models import create_model
 import utils
 import modeling_pretrain
-from datasets import CelebA, Place365
+from datasets import CelebA, Place365, DataAugmentationForMAE
 from torchvision.transforms import ToPILImage
 from torchvision.utils import save_image
+from torchvision.datasets import ImageFolder
 from einops import rearrange
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from masking_generator import RandomMaskingGenerator
@@ -26,7 +27,7 @@ def get_args():
     parser = argparse.ArgumentParser('MAE visualization reconstruction script')
     parser.add_argument('--img_path', default='files/ILSVRC2012_val_00031649.JPEG', type=str, help='input image path')
     parser.add_argument('--save_path', default='output/', type=str, help='save image path')
-    parser.add_argument('--pretrain_model_path', default='checkpoints/mae_pretrain.pth', type=str, help='checkpoint path of pre-trained model')
+    parser.add_argument('--pretrain_model_path', default='output/pretrain/checkpoint-39.pth', type=str, help='checkpoint path of pre-trained model')
     parser.add_argument('--finetune_model_path', default='output/checkpoint-best.pth', type=str, help='checkpoint path of fine-tuned model')
 
     parser.add_argument('--batch_size', default=64, type=int,
@@ -113,9 +114,15 @@ def main(args):
 
     priset = CelebA(split='pri')
     # priset = Place365()
+
+    # transform = DataAugmentationForMAE(args)
+    # priset = ImageFolder('~/imagenet/train', transform=transform)
     priloader = DataLoader(priset, batch_size=args.batch_size, shuffle=True, worker_init_fn=seed_worker, num_workers=4, generator=g)
     
     img, _ = next(iter(priloader))
+
+    # add this is using ImageNet
+    # img = img[0]
     masked_position_generator = RandomMaskingGenerator(args.window_size, args.mask_ratio)
     bool_masked_pos = masked_position_generator()
     bool_masked_pos = torch.from_numpy(bool_masked_pos).unsqueeze(0).repeat(args.batch_size, 1)
@@ -133,14 +140,12 @@ def main(args):
         save_image(ori_img[:64,], osp.join(args.save_path, 'ori_img.jpg'), nrow=8)
         
         img_squeeze = rearrange(ori_img, 'b c (h p1) (w p2) -> b (h w) (p1 p2) c', p1=patch_size[0], p2=patch_size[0])
-        img_norm = (img_squeeze - img_squeeze.mean(dim=-2, keepdim=True)) / (img_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6)
-        img_patch = rearrange(img_norm, 'b n p c -> b n (p c)')
+        img_patch = rearrange(img_squeeze, 'b n p c -> b n (p c)')
+        # img_norm = (img_squeeze - img_squeeze.mean(dim=-2, keepdim=True)) / (img_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6)
+        # img_patch = rearrange(img_norm, 'b n p c -> b n (p c)')
 
         for i in range(args.batch_size):
             img_patch[i][bool_masked_pos[i]] = outputs[i]
-        # img_patch = outputs
-        # print(img_patch.shape, outputs.shape)
-        # input()
 
         # make mask
         mask = torch.ones_like(img_patch)
@@ -154,7 +159,7 @@ def main(args):
 
         # save reconstruction img
         rec_img = rearrange(img_patch, 'b n (p c) -> b n p c', c=3)
-        rec_img = rec_img * (img_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6) + img_squeeze.mean(dim=-2, keepdim=True)
+        # rec_img = rec_img * (img_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6) + img_squeeze.mean(dim=-2, keepdim=True)
         rec_img = rearrange(rec_img, 'b (h w) (p1 p2) c -> b c (h p1) (w p2)', p1=patch_size[0], p2=patch_size[1], h=14, w=14)
         save_image(rec_img[:64,], osp.join(args.save_path, 'rec_img.jpg'), nrow=8)
 

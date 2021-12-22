@@ -29,9 +29,9 @@ import modeling_pretrain
 
 def get_args():
     parser = argparse.ArgumentParser('MAE pre-training script', add_help=False)
-    parser.add_argument('--batch_size', default=64, type=int)
+    parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--epochs', default=400, type=int)
-    parser.add_argument('--save_ckpt_freq', default=50, type=int)
+    parser.add_argument('--save_ckpt_freq', default=10, type=int)
 
     # Model parameters
     parser.add_argument('--model', default='pretrain_mae_base_patch16_224', type=str, metavar='MODEL',
@@ -85,7 +85,7 @@ def get_args():
                         help='Training interpolation (random, bilinear, bicubic default: "bicubic")')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/data/common/ILSVRC/Data/CLS-LOC/train/', type=str,
+    parser.add_argument('--data_path', default='~/imagenet/train', type=str,
                         help='dataset path')
     parser.add_argument('--imagenet_default_mean_and_std', default=True, action='store_true')
 

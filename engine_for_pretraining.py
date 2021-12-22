@@ -18,7 +18,7 @@ from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 def train_one_epoch(model: torch.nn.Module, data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0, patch_size: int = 16, 
-                    normlize_target: bool = True, log_writer=None, lr_scheduler=None, start_steps=None,
+                    normlize_target: bool = False, log_writer=None, lr_scheduler=None, start_steps=None,
                     lr_schedule_values=None, wd_schedule_values=None):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -46,19 +46,20 @@ def train_one_epoch(model: torch.nn.Module, data_loader: Iterable, optimizer: to
         # import pdb; pdb.set_trace()
         with torch.no_grad():
             # calculate the predict label
-            mean = torch.as_tensor(IMAGENET_DEFAULT_MEAN).to(device)[None, :, None, None]
-            std = torch.as_tensor(IMAGENET_DEFAULT_STD).to(device)[None, :, None, None]
-            unnorm_images = images * std + mean  # in [0, 1]
+            # mean = torch.as_tensor(IMAGENET_DEFAULT_MEAN).to(device)[None, :, None, None]
+            # std = torch.as_tensor(IMAGENET_DEFAULT_STD).to(device)[None, :, None, None]
+            # unnorm_images = images * std + mean  # in [0, 1]
 
-            if normlize_target:
-                images_squeeze = rearrange(unnorm_images, 'b c (h p1) (w p2) -> b (h w) (p1 p2) c', p1=patch_size, p2=patch_size)
-                images_norm = (images_squeeze - images_squeeze.mean(dim=-2, keepdim=True)
-                    ) / (images_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6)
-                # we find that the mean is about 0.48 and standard deviation is about 0.08.
-                images_patch = rearrange(images_norm, 'b n p c -> b n (p c)')
-            else:
-                images_patch = rearrange(unnorm_images, 'b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)
+            # if normlize_target:
+            #     images_squeeze = rearrange(unnorm_images, 'b c (h p1) (w p2) -> b (h w) (p1 p2) c', p1=patch_size, p2=patch_size)
+            #     images_norm = (images_squeeze - images_squeeze.mean(dim=-2, keepdim=True)
+            #         ) / (images_squeeze.var(dim=-2, unbiased=True, keepdim=True).sqrt() + 1e-6)
+            #     # we find that the mean is about 0.48 and standard deviation is about 0.08.
+            #     images_patch = rearrange(images_norm, 'b n p c -> b n (p c)')
+            # else:
+            #     images_patch = rearrange(unnorm_images, 'b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)
 
+            images_patch = rearrange(images, 'b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)
             B, _, C = images_patch.shape
             labels = images_patch[bool_masked_pos].reshape(B, -1, C)
 

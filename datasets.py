@@ -133,7 +133,7 @@ class CelebA(Dataset):
 
 
 class CelebAMAEPretrain(Dataset):
-    def __init__(self, args, img_path='~/CelebA/celeba/img_align_celeba/', identity_file='~/CelebA/celeba/identity_CelebA.txt', num_ids=1000, imagenet_default_mean_and_std=False):
+    def __init__(self, args, img_path='~/CelebA/celeba/img_align_celeba/', identity_file='~/CelebA/celeba/identity_CelebA.txt', num_ids=1000, imagenet_default_mean_and_std=True):
         self.args = args
         self.num_ids = num_ids
         self.imagenet_default_mean_and_std = imagenet_default_mean_and_std
@@ -177,7 +177,7 @@ class CelebAMAEPretrain(Dataset):
             transforms.ToTensor(),
             transforms.Lambda(crop),
             transforms.Resize((re_size, re_size)),
-            transforms.Normalize(mean=torch.tensor(mean), std=torch.tensor(std))
+            # transforms.Normalize(mean=torch.tensor(mean), std=torch.tensor(std))
         ])
 
         self.masked_position_generator = RandomMaskingGenerator(
@@ -219,16 +219,16 @@ class Place365(Dataset):
 
 class DataAugmentationForMAE(object):
     def __init__(self, args):
-        imagenet_default_mean_and_std = args.imagenet_default_mean_and_std
-        mean = IMAGENET_INCEPTION_MEAN if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_MEAN
-        std = IMAGENET_INCEPTION_STD if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_STD
+        # imagenet_default_mean_and_std = args.imagenet_default_mean_and_std
+        # mean = IMAGENET_INCEPTION_MEAN if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_MEAN
+        # std = IMAGENET_INCEPTION_STD if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_STD
 
         self.transform = transforms.Compose([
             transforms.RandomResizedCrop(args.input_size),
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=torch.tensor(mean),
-                std=torch.tensor(std))
+            # transforms.Normalize(
+            #     mean=torch.tensor(mean),
+            #     std=torch.tensor(std))
         ])
 
         self.masked_position_generator = RandomMaskingGenerator(
